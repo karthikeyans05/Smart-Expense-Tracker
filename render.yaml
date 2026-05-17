@@ -1,0 +1,17 @@
+# Render Blueprint — deploy backend as Web Service
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: expense-tracker-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+    healthCheckPath: /api/expenses/health
+    plan: free

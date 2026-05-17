@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpenseFlow — Smart Expense Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- Sidebar Navigation -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="logo">
+            <span class="logo-icon">◈</span>
+            <span class="logo-text">ExpenseFlow</span>
+        </div>
+        <button class="sidebar-toggle" id="sidebarToggle">✕</button>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="dashboard">
+            <span class="nav-icon">⬡</span>
+            <span>Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-page="expenses">
+            <span class="nav-icon">◎</span>
+            <span>Expenses</span>
+        </a>
+        <a href="#" class="nav-item" data-page="budget">
+            <span class="nav-icon">◫</span>
+            <span>Budgets</span>
+        </a>
+        <a href="#" class="nav-item" data-page="analytics">
+            <span class="nav-icon">◉</span>
+            <span>Analytics</span>
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="month-selector">
+            <label>Viewing Period</label>
+            <div class="month-controls">
+                <button id="prevMonth">‹</button>
+                <span id="currentMonthLabel">May 2026</span>
+                <button id="nextMonth">›</button>
+            </div>
+        </div>
+    </div>
+</aside>
+
+<!-- Mobile Overlay -->
+<div class="overlay" id="overlay"></div>
+
+<!-- Main Content -->
+<main class="main-content">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+        <button class="menu-btn" id="menuBtn">☰</button>
+        <div class="topbar-right">
+            <div class="search-box">
+                <span class="search-icon">⌕</span>
+                <input type="text" id="globalSearch" placeholder="Search expenses...">
+            </div>
+            <button class="add-btn" id="openAddModal">+ Add Expense</button>
+        </div>
+    </header>
+
+    <!-- Pages -->
+    <!-- DASHBOARD PAGE -->
+    <section class="page active" id="page-dashboard">
+        <div class="page-header">
+            <h1>Dashboard</h1>
+            <p class="page-subtitle" id="dashSubtitle">Your financial overview</p>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card primary">
+                <div class="stat-label">Monthly Spent</div>
+                <div class="stat-value" id="monthlyTotal">₹0</div>
+                <div class="stat-sub" id="transactionCount">0 transactions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Average/Transaction</div>
+                <div class="stat-value" id="avgExpense">₹0</div>
+                <div class="stat-sub">per expense</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Top Category</div>
+                <div class="stat-value" id="topCategory">—</div>
+                <div class="stat-sub" id="topCategoryAmt">₹0 spent</div>
+            </div>
+            <div class="stat-card accent">
+                <div class="stat-label">Budget Health</div>
+                <div class="stat-value" id="budgetHealth">—</div>
+                <div class="stat-sub" id="budgetHealthSub">Set budgets to track</div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="charts-row">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3>Category Breakdown</h3>
+                </div>
+                <div class="donut-wrapper">
+                    <canvas id="donutChart" width="220" height="220"></canvas>
+                    <div class="donut-center">
+                        <span id="donutTotal">₹0</span>
+                        <small>total</small>
+                    </div>
+                </div>
+                <div class="legend" id="donutLegend"></div>
+            </div>
+
+            <div class="chart-card wide">
+                <div class="chart-header">
+                    <h3>Monthly Trend</h3>
+                </div>
+                <div class="bar-chart-wrapper">
+                    <canvas id="barChart" width="500" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Expenses -->
+        <div class="section-card">
+            <div class="section-header">
+                <h3>Recent Transactions</h3>
+                <a href="#" class="view-all" data-page="expenses">View all →</a>
+            </div>
+            <div class="expense-list" id="recentExpenses">
+                <div class="empty-state">Loading...</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- EXPENSES PAGE -->
+    <section class="page" id="page-expenses">
+        <div class="page-header">
+            <h1>Expenses</h1>
+            <div class="filter-bar">
+                <select id="filterCategory">
+                    <option value="">All Categories</option>
+                    <option>Food & Dining</option>
+                    <option>Bills & Utilities</option>
+                    <option>Transport</option>
+                    <option>Entertainment</option>
+                    <option>Healthcare</option>
+                    <option>Shopping</option>
+                    <option>Education</option>
+                    <option>Other</option>
+                </select>
+                <select id="filterPayment">
+                    <option value="">All Methods</option>
+                    <option value="CASH">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="CREDIT_CARD">Credit Card</option>
+                    <option value="DEBIT_CARD">Debit Card</option>
+                    <option value="NET_BANKING">Net Banking</option>
+                </select>
+            </div>
+        </div>
+        <div class="expense-table-wrapper">
+            <table class="expense-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Title</th>
+                        <th>Category</th>
+                        <th>Payment</th>
+                        <th>Amount</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="expenseTableBody">
+                    <tr><td colspan="6" class="empty-row">Loading expenses...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- BUDGET PAGE -->
+    <section class="page" id="page-budget">
+        <div class="page-header">
+            <h1>Budgets</h1>
+            <button class="add-btn" id="openBudgetModal">+ Set Budget</button>
+        </div>
+        <div class="budget-grid" id="budgetGrid">
+            <div class="empty-state">No budgets set for this month.</div>
+        </div>
+    </section>
+
+    <!-- ANALYTICS PAGE -->
+    <section class="page" id="page-analytics">
+        <div class="page-header">
+            <h1>Analytics</h1>
+        </div>
+        <div class="analytics-grid">
+            <div class="chart-card">
+                <h3>Spending by Category (All Time)</h3>
+                <canvas id="allTimeCategoryChart" width="400" height="300"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Payment Method Usage</h3>
+                <canvas id="paymentMethodChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- ADD / EDIT EXPENSE MODAL -->
+<div class="modal-overlay" id="expenseModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="modalTitle">Add Expense</h2>
+            <button class="modal-close" id="closeExpenseModal">✕</button>
+        </div>
+        <form id="expenseForm" class="modal-form">
+            <input type="hidden" id="expenseId">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input type="text" id="expTitle" placeholder="e.g. Grocery Shopping" required>
+                </div>
+                <div class="form-group">
+                    <label>Amount (₹) *</label>
+                    <input type="number" id="expAmount" placeholder="0.00" step="0.01" min="0.01" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Category *</label>
+                    <select id="expCategory" required>
+                        <option value="">Select category</option>
+                        <option>Food & Dining</option>
+                        <option>Bills & Utilities</option>
+                        <option>Transport</option>
+                        <option>Entertainment</option>
+                        <option>Healthcare</option>
+                        <option>Shopping</option>
+                        <option>Education</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date *</label>
+                    <input type="date" id="expDate" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Payment Method</label>
+                <select id="expPayment">
+                    <option value="CASH">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="CREDIT_CARD">Credit Card</option>
+                    <option value="DEBIT_CARD">Debit Card</option>
+                    <option value="NET_BANKING">Net Banking</option>
+                    <option value="OTHER">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="expDescription" placeholder="Optional note...">
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" id="cancelExpense">Cancel</button>
+                <button type="submit" class="btn-primary" id="saveExpenseBtn">Save Expense</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- BUDGET MODAL -->
+<div class="modal-overlay" id="budgetModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Set Monthly Budget</h2>
+            <button class="modal-close" id="closeBudgetModal">✕</button>
+        </div>
+        <form id="budgetForm" class="modal-form">
+            <div class="form-group">
+                <label>Category *</label>
+                <select id="budgetCategory" required>
+                    <option value="">Select category</option>
+                    <option>Food & Dining</option>
+                    <option>Bills & Utilities</option>
+                    <option>Transport</option>
+                    <option>Entertainment</option>
+                    <option>Healthcare</option>
+                    <option>Shopping</option>
+                    <option>Education</option>
+                    <option>Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Monthly Limit (₹) *</label>
+                <input type="number" id="budgetLimit" placeholder="0.00" step="0.01" min="1" required>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-secondary" id="cancelBudget">Cancel</button>
+                <button type="submit" class="btn-primary">Save Budget</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast Notification -->
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
