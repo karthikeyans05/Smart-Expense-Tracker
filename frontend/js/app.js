@@ -3,7 +3,7 @@
  * Connects to Spring Boot REST API on http://localhost:8080
  */
 
-const API_BASE = 'https://smart-expense-tracker-production.up.railway.app/api';
+const API_BASE = 'https://expense-tracker-api-production-9500.up.railway.app/api';
 
 // ============================================================
 // STATE
