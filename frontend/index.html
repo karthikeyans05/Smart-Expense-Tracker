@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ExpenseFlow">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="description" content="Track expenses, set budgets, and visualize your spending.">
     <title>ExpenseFlow — Smart Expense Tracker</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
@@ -109,7 +117,7 @@
                     <h3>Category Breakdown</h3>
                 </div>
                 <div class="donut-wrapper">
-                    <canvas id="donutChart" width="220" height="220"></canvas>
+                    <canvas id="donutChart"></canvas>
                     <div class="donut-center">
                         <span id="donutTotal">₹0</span>
                         <small>total</small>

@@ -9,11 +9,14 @@ const API_BASE = 'http://localhost:8080/api';
 // STATE
 // ============================================================
 let state = {
-    currentMonth: new Date().getMonth() + 1,
-    currentYear:  new Date().getFullYear(),
-    expenses:     [],
-    budgets:      [],
-    allExpenses:  [],
+    currentMonth:          new Date().getMonth() + 1,
+    currentYear:           new Date().getFullYear(),
+    expenses:              [],
+    budgets:               [],
+    allExpenses:           [],
+    lastDonutData:         {},
+    lastBarData:           [],
+    lastAnalyticsExpenses: [],
 };
 
 const CATEGORIES = {
@@ -31,6 +34,14 @@ const PAYMENT_LABELS = {
     CASH: 'Cash', CREDIT_CARD: 'Credit Card', DEBIT_CARD: 'Debit Card',
     UPI: 'UPI', NET_BANKING: 'Net Banking', OTHER: 'Other',
 };
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function debounce(fn, delay) {
+    let timer;
+    return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+}
 
 // ============================================================
 // API HELPERS
@@ -95,9 +106,8 @@ function navigateTo(page) {
     if (page === 'budget')    loadBudgetPage();
     if (page === 'analytics') loadAnalytics();
 
-    // Close sidebar on mobile
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('overlay').classList.remove('show');
+    // Close sidebar on mobile after navigation
+    closeSidebar();
 }
 
 // ============================================================
@@ -105,15 +115,15 @@ function navigateTo(page) {
 // ============================================================
 async function loadDashboard() {
     try {
-        const stats = await apiFetch(`/expenses/stats/${state.currentYear}/${state.currentMonth}`);
+        const stats  = await apiFetch(`/expenses/stats/${state.currentYear}/${state.currentMonth}`);
         const recent = await apiFetch(`/expenses/month/${state.currentYear}/${state.currentMonth}`);
 
         state.expenses = recent;
 
-        document.getElementById('dashSubtitle').textContent = monthName(state.currentMonth, state.currentYear);
-        document.getElementById('monthlyTotal').textContent  = fmt(stats.monthlyTotal || 0);
-        document.getElementById('avgExpense').textContent    = fmt(stats.averageExpense || 0);
-        document.getElementById('transactionCount').textContent = `${stats.totalTransactions || 0} transactions`;
+        document.getElementById('dashSubtitle').textContent     = monthName(state.currentMonth, state.currentYear);
+        document.getElementById('monthlyTotal').textContent      = fmt(stats.monthlyTotal || 0);
+        document.getElementById('avgExpense').textContent        = fmt(stats.averageExpense || 0);
+        document.getElementById('transactionCount').textContent  = `${stats.totalTransactions || 0} transactions`;
 
         // Top Category
         const catBreakdown = stats.categoryBreakdown || {};
@@ -123,7 +133,6 @@ async function loadDashboard() {
             document.getElementById('topCategoryAmt').textContent = fmt(topCat[1]) + ' spent';
         }
 
-        // Budget Health
         await updateBudgetHealth();
 
         renderDonutChart(catBreakdown);
@@ -139,44 +148,59 @@ async function updateBudgetHealth() {
     try {
         const status = await apiFetch(`/budgets/status/${state.currentYear}/${state.currentMonth}`);
         if (!status.length) {
-            document.getElementById('budgetHealth').textContent = '—';
+            document.getElementById('budgetHealth').textContent    = '—';
             document.getElementById('budgetHealthSub').textContent = 'No budgets set';
             return;
         }
         const exceeded = status.filter(b => b.exceeded).length;
-        const healthEl  = document.getElementById('budgetHealth');
-        const subEl     = document.getElementById('budgetHealthSub');
+        const healthEl = document.getElementById('budgetHealth');
+        const subEl    = document.getElementById('budgetHealthSub');
         if (exceeded === 0) {
             healthEl.textContent = '✓ On Track';
             healthEl.style.color = '#3ecf8e';
-            subEl.textContent = `All ${status.length} budgets in limit`;
+            subEl.textContent    = `All ${status.length} budgets in limit`;
         } else {
             healthEl.textContent = `${exceeded} Exceeded`;
             healthEl.style.color = '#f05656';
-            subEl.textContent = `of ${status.length} budgets`;
+            subEl.textContent    = `of ${status.length} budgets`;
         }
     } catch(e) { /* silent */ }
 }
 
 // ============================================================
-// DONUT CHART (pure Canvas)
+// DONUT CHART — responsive, pure Canvas
 // ============================================================
 function renderDonutChart(categoryData) {
-    const canvas = document.getElementById('donutChart');
-    const ctx    = canvas.getContext('2d');
-    const cx = canvas.width / 2, cy = canvas.height / 2;
-    const R = 85, r = 52;
+    state.lastDonutData = categoryData;
+
+    const canvas  = document.getElementById('donutChart');
+    const wrapper = canvas.parentElement;
+    // Clamp to 220 max but fill the container on small screens
+    const size    = Math.min(wrapper.clientWidth || 220, 220);
+    canvas.width  = size;
+    canvas.height = size;
+
+    const ctx = canvas.getContext('2d');
+    const cx  = size / 2;
+    const cy  = size / 2;
+    const R   = Math.floor(size * 0.386); // outer radius ≈85 at 220px
+    const r   = Math.floor(size * 0.236); // inner radius ≈52 at 220px
+
     const entries = Object.entries(categoryData);
     const total   = entries.reduce((s,[,v]) => s + Number(v), 0);
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, size, size);
     document.getElementById('donutTotal').textContent = fmt(total);
 
     if (!entries.length) {
         ctx.fillStyle = '#2a2a38';
         ctx.beginPath();
         ctx.arc(cx, cy, R, 0, Math.PI * 2);
-        ctx.arc(cx, cy, r, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#111118';
         ctx.fill();
         return;
     }
@@ -184,7 +208,7 @@ function renderDonutChart(categoryData) {
     let startAngle = -Math.PI / 2;
     const colors = entries.map(([cat]) => (CATEGORIES[cat] || { color: '#90a4ae' }).color);
 
-    entries.forEach(([cat, val], i) => {
+    entries.forEach(([, val], i) => {
         const slice = (Number(val) / total) * Math.PI * 2;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -215,16 +239,17 @@ function renderDonutChart(categoryData) {
 }
 
 // ============================================================
-// BAR CHART (pure Canvas)
+// BAR CHART — responsive, pure Canvas
 // ============================================================
 function renderBarChart(monthlyTrend) {
+    state.lastBarData = monthlyTrend;
+
     const canvas = document.getElementById('barChart');
     if (!canvas) return;
 
-    // Resize canvas to wrapper
-    const wrapper = canvas.parentElement;
-    canvas.width  = wrapper.clientWidth || 500;
-    canvas.height = 200;
+    const wrapper  = canvas.parentElement;
+    canvas.width   = wrapper.clientWidth || 500;
+    canvas.height  = 200;
 
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -232,14 +257,14 @@ function renderBarChart(monthlyTrend) {
     const data = monthlyTrend.slice(0, 6).reverse();
     if (!data.length) return;
 
-    const maxVal  = Math.max(...data.map(d => Number(d.total)));
-    const padL = 50, padR = 16, padT = 16, padB = 50;
-    const chartW  = canvas.width  - padL - padR;
-    const chartH  = canvas.height - padT - padB;
-    const barW    = Math.min((chartW / data.length) * 0.55, 60);
-    const gap     = chartW / data.length;
+    const maxVal = Math.max(...data.map(d => Number(d.total)));
+    const padL   = 50, padR = 16, padT = 16, padB = 50;
+    const chartW = canvas.width  - padL - padR;
+    const chartH = canvas.height - padT - padB;
+    const barW   = Math.min((chartW / data.length) * 0.55, 60);
+    const gap    = chartW / data.length;
 
-    const MONTHS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     // Y-axis gridlines
     ctx.strokeStyle = '#2a2a38';
@@ -252,33 +277,31 @@ function renderBarChart(monthlyTrend) {
         ctx.stroke();
 
         const val = maxVal * frac;
-        ctx.fillStyle = '#5a5a72';
-        ctx.font = '10px DM Sans';
-        ctx.textAlign = 'right';
+        ctx.fillStyle  = '#5a5a72';
+        ctx.font       = '10px DM Sans';
+        ctx.textAlign  = 'right';
         ctx.fillText(val >= 1000 ? `₹${(val/1000).toFixed(0)}k` : `₹${val.toFixed(0)}`, padL - 6, y + 3);
     });
 
     // Bars
     data.forEach((d, i) => {
         const barH = maxVal > 0 ? (Number(d.total) / maxVal) * chartH : 0;
-        const x = padL + gap * i + (gap - barW) / 2;
-        const y = padT + chartH - barH;
+        const x    = padL + gap * i + (gap - barW) / 2;
+        const y    = padT + chartH - barH;
 
-        // Bar gradient
         const grad = ctx.createLinearGradient(x, y, x, padT + chartH);
         grad.addColorStop(0, '#7c6af7');
         grad.addColorStop(1, 'rgba(124,106,247,0.2)');
 
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.roundRect ? ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0])
-                       : ctx.rect(x, y, barW, barH);
+        if (ctx.roundRect) ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]);
+        else ctx.rect(x, y, barW, barH);
         ctx.fill();
 
-        // X-axis label
         const label = `${MONTHS[Number(d.month) - 1]} ${String(d.year).slice(2)}`;
         ctx.fillStyle = '#5a5a72';
-        ctx.font = '10px DM Sans';
+        ctx.font      = '10px DM Sans';
         ctx.textAlign = 'center';
         ctx.fillText(label, x + barW / 2, padT + chartH + 18);
     });
@@ -323,7 +346,7 @@ async function loadExpensesPage() {
 }
 
 function renderExpenseTable(list) {
-    const tbody = document.getElementById('expenseTableBody');
+    const tbody     = document.getElementById('expenseTableBody');
     const catFilter = document.getElementById('filterCategory').value;
     const payFilter = document.getElementById('filterPayment').value;
 
@@ -414,6 +437,7 @@ async function loadBudgetPage() {
 async function loadAnalytics() {
     try {
         const allExpenses = await apiFetch('/expenses');
+        state.lastAnalyticsExpenses = allExpenses;
         renderAllTimeCategoryChart(allExpenses);
         renderPaymentMethodChart(allExpenses);
     } catch(e) {
@@ -430,7 +454,7 @@ function renderAllTimeCategoryChart(expenses) {
         catTotals[e.category] = (catTotals[e.category] || 0) + Number(e.amount);
     });
 
-    drawHorizontalBarChart(canvas, catTotals, 300);
+    drawHorizontalBarChart(canvas, catTotals, 280);
 }
 
 function renderPaymentMethodChart(expenses) {
@@ -443,7 +467,7 @@ function renderPaymentMethodChart(expenses) {
         pmTotals[label] = (pmTotals[label] || 0) + Number(e.amount);
     });
 
-    drawHorizontalBarChart(canvas, pmTotals, 300);
+    drawHorizontalBarChart(canvas, pmTotals, 220);
 }
 
 function drawHorizontalBarChart(canvas, data, height) {
@@ -456,7 +480,7 @@ function drawHorizontalBarChart(canvas, data, height) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const padL = 130, padR = 20, padT = 10, padB = 10;
+    const padL   = 130, padR = 20, padT = 10, padB = 10;
     const chartW = canvas.width  - padL - padR;
     const chartH = canvas.height - padT - padB;
     const barH   = Math.min(chartH / entries.length * 0.6, 24);
@@ -469,22 +493,19 @@ function drawHorizontalBarChart(canvas, data, height) {
         const barW = maxVal > 0 ? (val / maxVal) * chartW : 0;
         const y    = padT + gap * i + (gap - barH) / 2;
 
-        // Bar
         ctx.fillStyle = PALETTE[i % PALETTE.length] + '99';
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(padL, y, barW, barH, 4);
         else ctx.rect(padL, y, barW, barH);
         ctx.fill();
 
-        // Label
         ctx.fillStyle = '#9090a8';
-        ctx.font = '11px DM Sans';
+        ctx.font      = '11px DM Sans';
         ctx.textAlign = 'right';
         ctx.fillText(label, padL - 8, y + barH / 2 + 4);
 
-        // Value
         ctx.fillStyle = '#f0f0f8';
-        ctx.font = 'bold 11px DM Sans';
+        ctx.font      = 'bold 11px DM Sans';
         ctx.textAlign = 'left';
         ctx.fillText(fmt(val), padL + barW + 6, y + barH / 2 + 4);
     });
@@ -497,21 +518,21 @@ function openAddModal() {
     document.getElementById('modalTitle').textContent = 'Add Expense';
     document.getElementById('expenseForm').reset();
     document.getElementById('expenseId').value = '';
-    document.getElementById('expDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('expDate').value   = new Date().toISOString().split('T')[0];
     document.getElementById('expenseModal').classList.add('open');
 }
 
 async function editExpense(id) {
     try {
         const exp = await apiFetch(`/expenses/${id}`);
-        document.getElementById('modalTitle').textContent = 'Edit Expense';
-        document.getElementById('expenseId').value       = exp.id;
-        document.getElementById('expTitle').value        = exp.title;
-        document.getElementById('expAmount').value       = exp.amount;
-        document.getElementById('expCategory').value     = exp.category;
-        document.getElementById('expDate').value         = exp.date;
-        document.getElementById('expPayment').value      = exp.paymentMethod;
-        document.getElementById('expDescription').value  = exp.description || '';
+        document.getElementById('modalTitle').textContent    = 'Edit Expense';
+        document.getElementById('expenseId').value          = exp.id;
+        document.getElementById('expTitle').value           = exp.title;
+        document.getElementById('expAmount').value          = exp.amount;
+        document.getElementById('expCategory').value        = exp.category;
+        document.getElementById('expDate').value            = exp.date;
+        document.getElementById('expPayment').value         = exp.paymentMethod;
+        document.getElementById('expDescription').value     = exp.description || '';
         document.getElementById('expenseModal').classList.add('open');
     } catch(e) {
         showToast('Failed to load expense', 'error');
@@ -531,7 +552,7 @@ async function saveExpense(e) {
         description:   document.getElementById('expDescription').value.trim(),
     };
 
-    const btn = document.getElementById('saveExpenseBtn');
+    const btn       = document.getElementById('saveExpenseBtn');
     btn.textContent = 'Saving...';
     btn.disabled    = true;
 
@@ -651,26 +672,55 @@ function refreshCurrentPage() {
     const page = active.id.replace('page-', '');
     if (page === 'dashboard') loadDashboard();
     else if (page === 'expenses') loadExpensesPage();
-    else if (page === 'budget') loadBudgetPage();
+    else if (page === 'budget')   loadBudgetPage();
 }
 
 // ============================================================
-// SIDEBAR & MOBILE
+// SIDEBAR HELPERS
 // ============================================================
-document.getElementById('menuBtn').addEventListener('click', () => {
+function openSidebar() {
     document.getElementById('sidebar').classList.add('open');
     document.getElementById('overlay').classList.add('show');
-});
+}
 
-document.getElementById('sidebarToggle').addEventListener('click', () => {
+function closeSidebar() {
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('overlay').classList.remove('show');
-});
+}
 
-document.getElementById('overlay').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.remove('open');
-    document.getElementById('overlay').classList.remove('show');
-});
+document.getElementById('menuBtn').addEventListener('click', openSidebar);
+document.getElementById('sidebarToggle').addEventListener('click', closeSidebar);
+document.getElementById('overlay').addEventListener('click', closeSidebar);
+
+// ============================================================
+// TOUCH SWIPE — open/close sidebar with swipe gesture
+// ============================================================
+let _swipeX = 0, _swipeY = 0, _swipeT = 0;
+
+document.addEventListener('touchstart', (e) => {
+    _swipeX = e.touches[0].clientX;
+    _swipeY = e.touches[0].clientY;
+    _swipeT = Date.now();
+}, { passive: true });
+
+document.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - _swipeX;
+    const dy = e.changedTouches[0].clientY - _swipeY;
+    const dt = Date.now() - _swipeT;
+
+    // Only count fast, mostly-horizontal swipes
+    if (dt > 350 || Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx) * 0.8) return;
+
+    const sidebar = document.getElementById('sidebar');
+
+    if (dx > 50 && _swipeX < 40) {
+        // Swipe right from left edge → open sidebar
+        openSidebar();
+    } else if (dx < -50 && sidebar.classList.contains('open')) {
+        // Swipe left while sidebar is open → close it
+        closeSidebar();
+    }
+}, { passive: true });
 
 // ============================================================
 // MODAL EVENTS
@@ -690,7 +740,7 @@ document.getElementById('cancelBudget').addEventListener('click', () =>
     document.getElementById('budgetModal').classList.remove('open'));
 document.getElementById('budgetForm').addEventListener('submit', saveBudget);
 
-// Close modal on overlay click
+// Close modal on backdrop click
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
         if (e.target === overlay) overlay.classList.remove('open');
@@ -707,9 +757,55 @@ document.querySelectorAll('[data-page]').forEach(el => {
     });
 });
 
-// Filter listeners on expenses page
 document.getElementById('filterCategory').addEventListener('change', () => renderExpenseTable(state.allExpenses));
 document.getElementById('filterPayment').addEventListener('change',  () => renderExpenseTable(state.allExpenses));
+
+// ============================================================
+// RESPONSIVE CHART RESIZE — ResizeObserver redraws charts
+// without making extra API calls
+// ============================================================
+const handleChartResize = debounce(() => {
+    const activePage = document.querySelector('.page.active')?.id?.replace('page-', '');
+    if (activePage === 'dashboard') {
+        renderDonutChart(state.lastDonutData);
+        renderBarChart(state.lastBarData);
+    } else if (activePage === 'analytics' && state.lastAnalyticsExpenses.length) {
+        renderAllTimeCategoryChart(state.lastAnalyticsExpenses);
+        renderPaymentMethodChart(state.lastAnalyticsExpenses);
+    }
+}, 200);
+
+if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(handleChartResize);
+    ro.observe(document.querySelector('.main-content'));
+} else {
+    window.addEventListener('resize', handleChartResize);
+}
+
+// ============================================================
+// PWA — Install prompt
+// ============================================================
+let _installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _installPrompt = e;
+});
+
+window.addEventListener('appinstalled', () => {
+    _installPrompt = null;
+    showToast('ExpenseFlow installed!', 'success');
+});
+
+window.installPWA = async function () {
+    if (!_installPrompt) {
+        showToast('App is already installed or not yet installable.', 'info');
+        return;
+    }
+    _installPrompt.prompt();
+    await _installPrompt.userChoice;
+    _installPrompt = null;
+};
 
 // ============================================================
 // INIT
@@ -717,11 +813,11 @@ document.getElementById('filterPayment').addEventListener('change',  () => rende
 document.addEventListener('DOMContentLoaded', () => {
     updateMonthLabel();
     loadDashboard();
-});
 
-window.addEventListener('resize', () => {
-    const page = document.querySelector('.page.active')?.id.replace('page-', '');
-    if (page === 'dashboard') {
-        loadDashboard();
+    // Register Service Worker for PWA / offline support
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('SW registered, scope:', reg.scope))
+            .catch(err => console.warn('SW registration failed:', err));
     }
 });
